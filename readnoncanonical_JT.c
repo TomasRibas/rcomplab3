@@ -97,15 +97,23 @@ int main(int argc, char** argv)
                 }
                 break;
             case FLAG_RCV:
+                if (buf[0] == FLAG){
+                    state = FLAG_RCV;
+                    printf("Recebi flag quando não devia\n");
+                }
                 if( buf[0] == A){
                     state = A_RCV;
                     printf("Recebi acknowledge\n");
-                }
+                }                
                 else{
                     state = START;
                 }
                 break;
             case A_RCV:
+                if (buf[0] == FLAG){
+                    state = FLAG_RCV;
+                    printf("Recebi flag quando não devia\n");
+                }
                 if (buf[0] == C)
                 {
                     state = C_RCV;
@@ -116,6 +124,10 @@ int main(int argc, char** argv)
                 }
                 break;
             case C_RCV:
+                if (buf[0] == FLAG){
+                    state = FLAG_RCV;
+                    printf("Recebi flag quando não devia\n");
+                }
                 if (buf[0] == BCC)
                 {
                     state = BCC_OK;
@@ -131,8 +143,6 @@ int main(int argc, char** argv)
                     state = END;
                     printf("Recebi 2ª flag \n");
                     printf("\nTrama recebida com sucesso\n");
-                    
-
                 }
                 else{
                     state = START;

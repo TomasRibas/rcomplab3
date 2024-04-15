@@ -68,7 +68,6 @@ int main(int argc, char** argv)
     newtio.c_cc[VMIN]     = 5;   /* blocking read until 5 chars received */
 
 
-
     /*
     VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
     leitura do(s) próximo(s) caracter(es)
@@ -86,8 +85,8 @@ int main(int argc, char** argv)
     printf("New termios structure set\n");
 
     buf[0] = 0x5c;
-    buf[1] = 0x03;
-    buf[2] = 0x08;
+    buf[1] = 0x03;//era 0x03
+    buf[2] = 0x08;//era 0x08
     buf[3] = buf[1]^buf[2];
     buf[4] = 0x5c;
     //buf[5] = '\n';
@@ -95,12 +94,10 @@ int main(int argc, char** argv)
     res = write(fd,buf,5);
     printf("\n%d bytes written\n", res);
 
-
     /*
     O ciclo FOR e as instruções seguintes devem ser alterados de modo a respeitar
     o indicado no guião
     */
-
     sleep(1);
     if ( tcsetattr(fd,TCSANOW,&oldtio) == -1) {
         perror("tcsetattr");
@@ -168,8 +165,6 @@ int main(int argc, char** argv)
                 break;
         }
     }
-
-
     
     close(fd);
     return 0;
