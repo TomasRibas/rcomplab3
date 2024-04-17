@@ -224,7 +224,7 @@ int main(int argc, char** argv)
         buf_info[254] = FLAG;
 
         res_info = write(fd,buf_info,255);
-        printf("%d info bytes written\n", res_info);
+        printf("\n%d info bytes written\n", res_info);
     }
 
 
@@ -238,7 +238,7 @@ int main(int argc, char** argv)
                     if (buf_info_rr[0] == FLAG)
                     {
                         state = FLAG_RCV_INFO;
-                        printf("Recebi 1ª flag RR\n");
+                        printf("\nRecebi 1ª flag RR\n");
                     }
                     else{
                         state = END_CONTROL;
