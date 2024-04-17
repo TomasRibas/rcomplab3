@@ -12,26 +12,59 @@
 #define FALSE 0
 #define TRUE 1
 
-//definir estados
+//definir estados globais
 #define START 0
 #define FLAG_RCV 1
 #define A_RCV 2
-#define C_RCV 3
-#define BCC_OK 4
-#define END 5
 
+//definir estados controlo
+#define C_RCV_CONTROL 3
+#define BCC_OK_CONTROL 4
+#define END_CONTROL 5
+
+//definir variáveis globais
 #define FLAG 0x5c
-#define A 0x01
-#define C 0x06
-#define BCC A^C	
+#define A_SENDER 0x01
+#define A_RECEIVER 0x03
+
+//Variáveis de controlo
+#define C_CONTROL_RECEIVER 0x06
+#define C_CONTROL_SENDER 0x07
+#define BCC_CONTROL A_RECEIVER^C_CONTROL_RECEIVER
+
+//Variáveis de informação
+#define S0 0x80
+#define S1 0xC0
+#define BCC_INFO1 A_SENDER^S0
+#define BCC_INFO2 A_SENDER^S1
+#define RR0 0x01
+#define RR1 0x11
+#define BCC_INFO_RR0 A_RECEIVER^RR0
+#define BCC_INFO_RR1 A_RECEIVER^RR1
+
+//definir estados informação
+#define FLAG_RCV_INFO 6
+#define A_RCV_INFO 7
+#define S_C_RCV_INFO 8
+#define S_BCC_OK_1_INFO 9
+#define S_DATA_INFO 10
+#define S_BCC_OK_2_INFO 11
+#define R_C_RCV_INFO 12
+#define END_INFO 13
 
 volatile int STOP=FALSE;
 
 int main(int argc, char** argv)
 {
-    int fd,c, res, state; 
+    int fd,c,res_control,res_info, res_info_rr, state; 
     struct termios oldtio,newtio;
-    unsigned char buf[5];
+    unsigned char buf_controlo[5];
+    unsigned char buf_info[255];
+    unsigned char buf_info_rr[5];
+    unsigned char stored_data[255];
+
+    unsigned char BCC_INFO3[1];
+
     int i, sum = 0, speed = 0;
 
     if ( (argc < 2) ||
@@ -84,20 +117,17 @@ int main(int argc, char** argv)
 
     printf("New termios structure set\n");
 
-    buf[0] = 0x5c;
-    buf[1] = 0x03;//era 0x03
-    buf[2] = 0x08;//era 0x08
-    buf[3] = buf[1]^buf[2];
-    buf[4] = 0x5c;
-    //buf[5] = '\n';
+    buf_controlo[0] = FLAG;
+    buf_controlo[1] = A_SENDER;//era 0x03
+    buf_controlo[2] = C_CONTROL_SENDER;//era 0x08
+    buf_controlo[3] = buf_controlo[1]^buf_controlo[2];
+    buf_controlo[4] = FLAG;
+    
 
-    res = write(fd,buf,5);
-    printf("\n%d bytes written\n", res);
+    res_control = write(fd,buf_controlo,5);
+    printf("\n%d bytes written\n", res_control);
 
-    /*
-    O ciclo FOR e as instruções seguintes devem ser alterados de modo a respeitar
-    o indicado no guião
-    */
+    
     sleep(1);
     if ( tcsetattr(fd,TCSANOW,&oldtio) == -1) {
         perror("tcsetattr");
@@ -105,55 +135,55 @@ int main(int argc, char** argv)
     }
     
     state = START;
-    while (state != END)
+    while (state != END_CONTROL)
     {
-        res = read(fd,buf,1);   /* returns after 5 chars have been input */
-        buf[res]=0; 
+        res_control = read(fd,buf_controlo,1);   /* returns after 5 chars have been input */
+        buf_controlo[res_control]=0; 
         switch (state){
             case START:
-                if( buf[0] == FLAG){
+                if( buf_controlo[0] == FLAG){
                     state = FLAG_RCV;
-                    printf("\nRecebi 1ª flag\n");
+                    printf("\nRecebi 1ª flag no controlo\n");
                 }
                 else{
                     state = START;
                 }
                 break;
             case FLAG_RCV:
-                if( buf[0] == A){
+                if( buf_controlo[0] == A_RECEIVER){
                     state = A_RCV;
-                    printf("Recebi acknowledge\n");
+                    printf("Recebi acknowledge no controlo\n");
                 }
                 else{
                     state = START;
                 }
                 break;
             case A_RCV:
-                if (buf[0] == C)
+                if (buf_controlo[0] == C_CONTROL_RECEIVER)
                 {
-                    state = C_RCV;
-                    printf("Recebi controlo\n");
+                    state = C_RCV_CONTROL;
+                    printf("Recebi controlo no controlo\n");
                 }
                 else{
                     state = START;
                 }
                 break;
-            case C_RCV:
-                if (buf[0] == BCC)
+            case C_RCV_CONTROL:
+                if (buf_controlo[0] == BCC_CONTROL)
                 {
-                    state = BCC_OK;
-                    printf("Recebi bcc\n");
+                    state = BCC_OK_CONTROL;
+                    printf("Recebi bcc no controlo\n");
                 }
                 else{
                     state = START;
                 }
                 break;
-            case BCC_OK:
-                if (buf[0] == FLAG)
+            case BCC_OK_CONTROL:
+                if (buf_controlo[0] == FLAG)
                 {
-                    state = END;
-                    printf("Recebi 2ª flag \n");
-                    printf("\nTrama enviada com sucesso\n");
+                    state = END_CONTROL;
+                    printf("Recebi 2ª flag no controlo\n");
+                    printf("\nLigação estabelecida com sucesso\n");
                     
                 }
                 else{
@@ -165,7 +195,115 @@ int main(int argc, char** argv)
                 break;
         }
     }
+
+    int aux = 2;
+
+    printf("\nVou começar a enviar trama de informação\n");
     
+    if (state == END_CONTROL)
+    {
+        
+        buf_info[0] = FLAG;
+        buf_info[1] = A_SENDER;
+        
+        if(aux % 2 == 0){
+            buf_info[2] = S0;
+            aux++;
+        }
+        else{
+            buf_info[2] = S1;
+        }
+        buf_info[3] = buf_info[1]^buf_info[2];
+
+        for ( i = 4; i <255 ; i++)
+        {
+            buf_info[i] = 'O';
+        }
+
+        buf_info[253] = 'T';
+        buf_info[254] = FLAG;
+
+        res_info = write(fd,buf_info,255);
+        printf("%d info bytes written\n", res_info);
+    }
+
+
+    if (state == END_CONTROL){
+        while (state != END_INFO)
+        {
+            res_info_rr = read(fd,buf_info_rr,1);
+            buf_info_rr[res_info_rr]=0;
+            switch (state){
+                case END_CONTROL:
+                    if (buf_info_rr[0] == FLAG)
+                    {
+                        state = FLAG_RCV_INFO;
+                        printf("Recebi 1ª flag RR\n");
+                    }
+                    else{
+                        state = END_CONTROL;
+                    }                
+                    break;
+                case FLAG_RCV_INFO:
+                    if (buf_info_rr[0] == A_RECEIVER)
+                    {
+                        state = A_RCV_INFO;
+                        printf("Recebi acknowledge RR\n");
+                    }
+                    else{
+                        state = END_CONTROL;
+                    }
+                    break;
+                case A_RCV_INFO:
+                    if (buf_info_rr[0] == RR0)
+                    {
+                        state = S_C_RCV_INFO;
+                        printf("Recebi RR0\n");
+                    }
+                    else if (buf_info_rr[0] == RR1)
+                    {
+                        state = S_C_RCV_INFO;
+                        printf("Recebi RR1\n");
+                    }
+                    else{
+                        state = END_CONTROL;
+                    }
+                    break;
+                case S_C_RCV_INFO:
+                    if (buf_info_rr[0] == BCC_INFO_RR0)
+                    {
+                        state = S_BCC_OK_1_INFO;
+                        printf("Recebi bcc RR0\n");
+                    }
+                    else if (buf_info_rr[0] == BCC_INFO_RR1)
+                    {
+                        state = S_BCC_OK_1_INFO;
+                        printf("Recebi bcc RR1\n");
+                    }
+                    else{
+                        state = END_CONTROL;
+                    }
+                    break;
+                case S_BCC_OK_1_INFO:
+                    if (buf_info_rr[0] == FLAG)
+                    {
+                        state = END_INFO;
+                        printf("Recebi 2ª flag RR\n");
+                        printf("\nInformação enviada com sucesso\n");
+                    }
+                    else{
+                        state = END_CONTROL;
+                    }
+                    break;
+        
+                default:
+                    break;
+            }
+        } 
+    }
+    
+    sleep(1);
+    tcsetattr(fd,TCSANOW,&oldtio);
     close(fd);
     return 0;
 }
