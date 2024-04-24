@@ -98,7 +98,7 @@ int main(int argc, char** argv)
     newtio.c_lflag = 0;
 
     newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
-    newtio.c_cc[VMIN]     = 5;   /* blocking read until 5 chars received */
+    newtio.c_cc[VMIN]     = 1;   /* blocking read until 5 chars received */
 
 
     /*
@@ -127,13 +127,6 @@ int main(int argc, char** argv)
     res_control = write(fd,buf_controlo,5);
     printf("\n%d bytes written\n", res_control);
 
-    
-    sleep(1);
-    if ( tcsetattr(fd,TCSANOW,&oldtio) == -1) {
-        perror("tcsetattr");
-        exit(-1);
-    }
-    
     state = START;
     while (state != END_CONTROL)
     {
@@ -172,7 +165,7 @@ int main(int argc, char** argv)
                 if (buf_controlo[0] == BCC_CONTROL)
                 {
                     state = BCC_OK_CONTROL;
-                    printf("Recebi bcc no controlo\n");
+                    printf("Recebi BCC no controlo\n");
                 }
                 else{
                     state = START;
@@ -200,6 +193,8 @@ int main(int argc, char** argv)
 
     printf("\nVou começar a enviar trama de informação\n");
     
+    unsigned char bcc2_aux = 0x00;
+
     if (state == END_CONTROL)
     {
         
@@ -212,15 +207,23 @@ int main(int argc, char** argv)
         }
         else{
             buf_info[2] = S1;
+            aux++;
         }
         buf_info[3] = buf_info[1]^buf_info[2];
 
-        for ( i = 4; i <255 ; i++)
+        for ( i = 4; i <253 ; i++)
         {
-            buf_info[i] = 'O';
+            buf_info[i] = ('A'+ i)%255 ;
+            if (buf_info[i] == FLAG)
+            {
+                buf_info[i] = 0x7d;
+            }
+            bcc2_aux ^= buf_info[i];
         }
 
-        buf_info[253] = 'T';
+        //printf("\nBCC2: %c\n", bcc2_aux);
+
+        buf_info[253] = bcc2_aux;
         buf_info[254] = FLAG;
 
         res_info = write(fd,buf_info,255);
@@ -228,7 +231,7 @@ int main(int argc, char** argv)
     }
 
 
-    if (state == END_CONTROL){
+    if (state == END_CONTROL){  
         while (state != END_INFO)
         {
             res_info_rr = read(fd,buf_info_rr,1);
@@ -270,15 +273,17 @@ int main(int argc, char** argv)
                     }
                     break;
                 case S_C_RCV_INFO:
-                    if (buf_info_rr[0] == BCC_INFO_RR0)
+                    //printf("RR: %x\n", buf_info_rr[0]);
+                    if (buf_info_rr[0] == (A_RECEIVER^RR0)/*BCC_INFO_RR0*/)
                     {
                         state = S_BCC_OK_1_INFO;
-                        printf("Recebi bcc RR0\n");
+                        printf("Recebi BCC RR0\n");
                     }
-                    else if (buf_info_rr[0] == BCC_INFO_RR1)
+                    else if (buf_info_rr[0] == (A_RECEIVER^RR1)/*BCC_INFO_RR1*/)
                     {
+                        
                         state = S_BCC_OK_1_INFO;
-                        printf("Recebi bcc RR1\n");
+                        printf("Recebi BCC RR1\n");
                     }
                     else{
                         state = END_CONTROL;

@@ -96,7 +96,7 @@ int main(int argc, char** argv)
     newtio.c_lflag = 0;
 
     newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
-    newtio.c_cc[VMIN]     = 5;   /* blocking read until 5 chars received */
+    newtio.c_cc[VMIN]     = 1;   /* blocking read until 5 chars received */
 
     /*
     VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
@@ -134,7 +134,6 @@ int main(int argc, char** argv)
                     state = FLAG_RCV;
                     printf("Recebi flag quando não devia no controlo\n");
                 }
-                printf("buf_controlo[0]: %x\n", buf_controlo[0]);
                 if( buf_controlo[0] == A_SENDER){
                     state = A_RCV;
                     printf("Recebi acknowledge no controlo\n");
@@ -206,6 +205,8 @@ int main(int argc, char** argv)
 
     int pos = 0;
     int s = 0;
+    unsigned char bcc2_aux = 0x00;
+
 
     if (state == END_CONTROL)
     {
@@ -250,8 +251,10 @@ int main(int argc, char** argv)
                     break;
                 case S_C_RCV_INFO:
                     if ((buf_info[0]== BCC_INFO1) || (buf_info[0] == BCC_INFO2)){
+
                         state = S_BCC_OK_1_INFO;
-                        printf("Recebi bcc info\n");
+                        printf("Recebi BCC1 info\n");
+
                     }
                     else{
                         state = END_CONTROL;
@@ -264,11 +267,24 @@ int main(int argc, char** argv)
                         pos++;
                     }
                     else if (buf_info[0] == FLAG){
-                        BCC_INFO3[0] = stored_data[pos];
-                        printf("BCC_INFO3[0]: %d\n", BCC_INFO3[0]);
-                        printf("Recebi BCC2 info\n");
-                        printf("Acabei trama info\n");
-                        state = END_INFO;
+                        
+                        printf("Recebi dados info\n");
+                        BCC_INFO3[0] = stored_data[pos-1];
+                        
+                        for (int j = 0; j < pos-1; j++)
+                        {
+                            bcc2_aux ^= stored_data[j];
+                            //printf("bcc2: %c\n", bcc2_aux);
+                        }
+
+                        //printf("bcc2 dif: %c\n", bcc2_aux);
+
+                        if (bcc2_aux == BCC_INFO3[0])
+                        {
+                            printf("Recebi BCC2 info\n");
+                            printf("\nAcabei trama info\n");
+                            state = END_INFO;
+                        }
                     }
                     break;
 
@@ -279,24 +295,33 @@ int main(int argc, char** argv)
     }
 
 
+
     if (state == END_INFO)
     {
         buf_info_rr[0] = FLAG;
         buf_info_rr[1] = A_RECEIVER;
         if (s == 0)
         {
-            buf_info_rr[2] = RR0;
+            buf_info_rr[2] = RR1;
+
         }
         else if (s == 1)
         {
-            buf_info_rr[2] = RR1;
+            buf_info_rr[2] = RR0;
+
         }
 
         buf_info_rr[3] = buf_info_rr[1]^buf_info_rr[2];
+        //printf("buf_info_rr[3]: %x\n", buf_info_rr[3]);
         buf_info_rr[4] = FLAG;
 
 
         res_info_rr = write(fd,buf_info_rr,5);
+        /*for (int j = 0; j < 5; j++)
+        {
+            printf("\nbuf_info_rr[%d]: %x\n", j, buf_info_rr[j]);
+        }*/
+        
         printf("\n%d bytes written\n", res_info_rr);
         printf("\nTrama RR enviada com sucesso\n");
 
